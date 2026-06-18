@@ -1,0 +1,194 @@
+import { useMemo } from "react";
+import {
+  AreaChart, Area, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
+import { TrendingUp, Building2, Smartphone, CreditCard, ArrowUpRight, ArrowDownRight, ArrowRight } from "lucide-react";
+import { Transaction, PaymentMethod } from "../types";
+import { buildMonthlyData, fmt, CATEGORY_COLORS } from "../utils";
+import { TxnRow, CustomTooltip, METHOD_CFG } from "./common";
+
+function StatCard({
+  label, value, sub, color, Icon, delta,
+}: {
+  label: string; value: string; sub: string; color: string;
+  Icon: any; delta?: number;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/5 bg-[#0e1525] p-5 flex flex-col gap-3 hover:border-white/10 transition-all duration-300 group shadow-lg">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">{label}</span>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors group-hover:bg-opacity-30" style={{ background: color + "15" }}>
+          <Icon size={16} style={{ color }} strokeWidth={2.5} />
+        </div>
+      </div>
+      <div>
+        <p className="font-['DM_Mono'] text-2xl font-semibold text-foreground tracking-tight">{value}</p>
+        <p className="text-[11px] text-muted-foreground mt-1 font-medium">{sub}</p>
+      </div>
+      {delta !== undefined && (
+        <div className={`flex items-center gap-1.5 text-[11px] font-bold ${delta >= 0 ? "text-red-400" : "text-emerald-400"}`}>
+          <div className={`p-0.5 rounded-full ${delta >= 0 ? "bg-red-400/10" : "bg-emerald-400/10"}`}>
+            {delta >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+          </div>
+          {Math.abs(delta).toFixed(1)}% vs last month
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Dashboard({ all }: { all: Transaction[] }) {
+  const monthly = useMemo(() => buildMonthlyData(all), [all]);
+  const total = all.reduce((s, t) => s + t.amount, 0);
+  
+  const byMethod = (m: PaymentMethod) => 
+    all.filter((t) => t.method === m).reduce((s, t) => s + t.amount, 0);
+
+  const pieData = (["bank", "upi", "card", "cash"] as PaymentMethod[]).map((m) => ({
+    name: METHOD_CFG[m].label,
+    value: byMethod(m),
+    color: METHOD_CFG[m].color,
+  }));
+
+  const catTotals = Object.entries(
+    all.reduce<Record<string, number>>((acc, t) => {
+      acc[t.category] = (acc[t.category] || 0) + t.amount;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  const recent = [...all].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+
+  const lastMonthTotal = monthly[monthly.length - 2]?.total || 0;
+  const thisMonthTotal = monthly[monthly.length - 1]?.total || 0;
+  const delta = lastMonthTotal ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100 : 0;
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div>
+        <h1 className="font-['Outfit'] text-3xl font-bold text-foreground tracking-tight">Overview</h1>
+        <p className="text-sm text-muted-foreground mt-1.5 font-medium flex items-center gap-2">
+          Jan – Jun 2026 
+          <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+          6-month summary
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <StatCard label="Total Spending" value={fmt(total)} sub="Across all accounts" color="#818cf8" Icon={TrendingUp} delta={delta} />
+        <StatCard label="Bank Transfer" value={fmt(byMethod("bank"))} sub={`${((byMethod("bank") / total) * 100).toFixed(0)}% of total`} color="#60a5fa" Icon={Building2} />
+        <StatCard label="UPI / GPay" value={fmt(byMethod("upi"))} sub={`${((byMethod("upi") / total) * 100).toFixed(0)}% of total`} color="#c084fc" Icon={Smartphone} />
+        <StatCard label="Cards & Cash" value={fmt(byMethod("card") + byMethod("cash"))} sub="Combined sources" color="#fb923c" Icon={CreditCard} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 rounded-2xl border border-white/5 bg-[#0e1525] p-6 shadow-xl">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="font-['Outfit'] font-bold text-foreground tracking-tight">Monthly Trends</h3>
+            <div className="flex gap-4">
+              {["bank", "upi", "card", "cash"].map((m) => (
+                <div key={m} className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ background: METHOD_CFG[m as PaymentMethod].color }} />
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{m}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={monthly} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+              <defs>
+                {(["bank", "upi", "card", "cash"] as PaymentMethod[]).map((m) => (
+                  <linearGradient key={m} id={`grad-${m}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={METHOD_CFG[m].color} stopOpacity={0.25} />
+                    <stop offset="100%" stopColor={METHOD_CFG[m].color} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+              <XAxis dataKey="month" tick={{ fill: "#6b7494", fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} dy={10} />
+              <YAxis 
+                tick={{ fill: "#6b7494", fontSize: 10, fontFamily: "DM Mono", fontWeight: 500 }} 
+                axisLine={false} 
+                tickLine={false} 
+                tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} 
+              />
+              <Tooltip content={<CustomTooltip />} />
+              {(["bank", "upi", "card", "cash"] as PaymentMethod[]).map((m) => (
+                <Area key={m} type="monotone" dataKey={m} name={METHOD_CFG[m].label} stroke={METHOD_CFG[m].color} strokeWidth={2.5} fill={`url(#grad-${m})`} />
+              ))}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="rounded-2xl border border-white/5 bg-[#0e1525] p-6 shadow-xl flex flex-col">
+          <h3 className="font-['Outfit'] font-bold text-foreground tracking-tight mb-6">Spend Distribution</h3>
+          <div className="flex-1 flex flex-col justify-center items-center">
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="value">
+                  {pieData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} stroke="transparent" />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="w-full space-y-3 mt-6">
+              {pieData.map((d) => (
+                <div key={d.name} className="flex items-center justify-between group">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ background: d.color }} />
+                    <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">{d.name}</span>
+                  </div>
+                  <span className="font-['DM_Mono'] text-xs font-semibold text-foreground">{fmt(d.value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
+        <div className="rounded-2xl border border-white/5 bg-[#0e1525] p-6 shadow-xl">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-['Outfit'] font-bold text-foreground tracking-tight">Spending by Category</h3>
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Top 6</span>
+          </div>
+          <div className="space-y-5">
+            {catTotals.map(([cat, amt]) => {
+              const pct = (amt / total) * 100;
+              const color = CATEGORY_COLORS[cat] || "#94a3b8";
+              return (
+                <div key={cat} className="space-y-2">
+                  <div className="flex justify-between items-end">
+                    <span className="text-xs font-semibold text-foreground/90">{cat}</span>
+                    <span className="font-['DM_Mono'] text-xs font-bold text-foreground">{fmt(amt)} <span className="text-[10px] text-muted-foreground ml-1">({pct.toFixed(1)}%)</span></span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/[0.03] overflow-hidden">
+                    <div 
+                      className="h-full rounded-full transition-all duration-1000 ease-out" 
+                      style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}dd, ${color})` }} 
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/5 bg-[#0e1525] p-6 shadow-xl flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-['Outfit'] font-bold text-foreground tracking-tight">Recent Activity</h3>
+            <button className="text-[10px] font-bold text-primary uppercase tracking-widest hover:underline flex items-center gap-1">
+              View All <ArrowRight size={10} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto pr-1">
+            {recent.map((t) => <TxnRow key={t.id} t={t} />)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
