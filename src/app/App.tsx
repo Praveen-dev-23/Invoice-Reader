@@ -4,11 +4,14 @@ import { Transaction, Page } from "./types";
 import { SEED_DATA } from "./data";
 import { Sidebar } from "./components/Sidebar";
 import { Dashboard } from "./components/Dashboard";
-import { MethodPage } from "./components/MethodPage";
 import { UploadPage } from "./components/UploadPage";
+import { LandingPage } from "./components/LandingPage";
+import { TransactionExplorer } from "./components/TransactionExplorer";
+import { InsightsPage } from "./components/InsightsPage";
+import { ReportsPage } from "./components/ReportsPage";
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<Page>("dashboard");
+  const [currentPage, setCurrentPage] = useState<Page>("landing");
   const [transactions, setTransactions] = useState<Transaction[]>(SEED_DATA);
 
   const handleAddTransaction = (t: Transaction) => {
@@ -17,20 +20,20 @@ export default function App() {
 
   const renderPage = () => {
     switch (currentPage) {
+      case "landing":
+        return <LandingPage onNavigate={setCurrentPage} />;
       case "dashboard":
         return <Dashboard all={transactions} />;
-      case "bank":
-        return <MethodPage method="bank" all={transactions} />;
-      case "upi":
-        return <MethodPage method="upi" all={transactions} />;
-      case "card":
-        return <MethodPage method="card" all={transactions} />;
-      case "cash":
-        return <MethodPage method="cash" all={transactions} />;
+      case "explorer":
+        return <TransactionExplorer all={transactions} />;
+      case "insights":
+        return <InsightsPage all={transactions} />;
+      case "reports":
+        return <ReportsPage all={transactions} />;
       case "upload":
         return <UploadPage onAdd={handleAddTransaction} />;
       default:
-        return <Dashboard all={transactions} />;
+        return <LandingPage onNavigate={setCurrentPage} />;
     }
   };
 

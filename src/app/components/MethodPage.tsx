@@ -10,21 +10,26 @@ export function MethodPage({
   method, all,
 }: { method: PaymentMethod; all: Transaction[] }) {
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "debit" | "credit">("all");
+  
   const cfg = METHOD_CFG[method];
   const txns = all.filter((t) => t.method === method);
   const monthly = buildMonthlyData(txns);
-  const total = txns.reduce((s, t) => s + t.amount, 0);
-  const avgMonthly = total / 6;
+  
+  const debitTotal = txns.filter(t => t.type === "debit").reduce((s, t) => s + t.amount, 0);
+  const creditTotal = txns.filter(t => t.type === "credit").reduce((s, t) => s + t.amount, 0);
+  const total = debitTotal - creditTotal;
 
   const filtered = txns.filter(
     (t) =>
-      search === "" ||
-      t.merchant.toLowerCase().includes(search.toLowerCase()) ||
-      t.category.toLowerCase().includes(search.toLowerCase())
+      (typeFilter === "all" || t.type === typeFilter) &&
+      (search === "" ||
+        t.merchant.toLowerCase().includes(search.toLowerCase()) ||
+        t.category.toLowerCase().includes(search.toLowerCase()))
   ).sort((a, b) => b.date.localeCompare(a.date));
 
   const catTotals = Object.entries(
-    txns.reduce<Record<string, number>>((acc, t) => {
+    txns.filter(t => t.type === "debit").reduce<Record<string, number>>((acc, t) => {
       acc[t.category] = (acc[t.category] || 0) + t.amount;
       return acc;
     }, {})
@@ -32,28 +37,58 @@ export function MethodPage({
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg" style={{ background: cfg.color + "20" }}>
-          <cfg.Icon size={22} style={{ color: cfg.color }} strokeWidth={2.5} />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg" style={{ background: cfg.color + "20" }}>
+            <cfg.Icon size={22} style={{ color: cfg.color }} strokeWidth={2.5} />
+          </div>
+          <div>
+            <h1 className="font-['Outfit'] text-3xl font-bold text-foreground tracking-tight">{cfg.label}</h1>
+            <p className="text-sm text-muted-foreground mt-1 font-medium">Spending analytics for your {cfg.label.toLowerCase()}s</p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-['Outfit'] text-3xl font-bold text-foreground tracking-tight">{cfg.label}</h1>
-          <p className="text-sm text-muted-foreground mt-1 font-medium">Spending analytics for your {cfg.label.toLowerCase()}s</p>
+
+        {/* Debit vs Credit filter */}
+        <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl p-1 self-start sm:self-center">
+          <button
+            onClick={() => setTypeFilter("all")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+              typeFilter === "all" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setTypeFilter("debit")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+              typeFilter === "debit" ? "bg-red-500/20 text-red-400 border border-red-500/20" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Debits
+          </button>
+          <button
+            onClick={() => setTypeFilter("credit")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+              typeFilter === "credit" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Credits
+          </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <div className="rounded-2xl border border-white/5 bg-[#0e1525] p-5 shadow-lg">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-2">Total Volume</p>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-2">Net Spent</p>
           <p className="font-['DM_Mono'] text-2xl font-bold" style={{ color: cfg.color }}>{fmt(total)}</p>
         </div>
         <div className="rounded-2xl border border-white/5 bg-[#0e1525] p-5 shadow-lg">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-2">Count</p>
-          <p className="font-['DM_Mono'] text-2xl font-bold text-foreground">{txns.length} <span className="text-sm text-muted-foreground font-medium">txns</span></p>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-2">Total Debits</p>
+          <p className="font-['DM_Mono'] text-2xl font-bold text-red-400">{fmt(debitTotal)}</p>
         </div>
         <div className="rounded-2xl border border-white/5 bg-[#0e1525] p-5 shadow-lg">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-2">Monthly Average</p>
-          <p className="font-['DM_Mono'] text-2xl font-bold text-foreground">{fmt(avgMonthly)}</p>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-2">Total Credits</p>
+          <p className="font-['DM_Mono'] text-2xl font-bold text-emerald-400">{fmt(creditTotal)}</p>
         </div>
       </div>
 

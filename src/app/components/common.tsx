@@ -31,26 +31,48 @@ export const METHOD_CFG: Record<PaymentMethod, {
 export function TxnRow({ t }: { t: Transaction }) {
   const cfg = METHOD_CFG[t.method];
   const catColor = CATEGORY_COLORS[t.category] || "#94a3b8";
+  const isCredit = t.type === "credit";
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors rounded-lg px-2 -mx-2 group">
-      <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105"
-        style={{ background: catColor + "20" }}
-      >
-        <span style={{ color: catColor }} className="text-xs font-bold font-['DM_Mono']">
-          {t.merchant.slice(0, 2).toUpperCase()}
+    <div className="flex flex-col py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors rounded-lg px-2 -mx-2 group">
+      <div className="flex items-center gap-3">
+        <div
+          className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105"
+          style={{ background: catColor + "20" }}
+        >
+          <span style={{ color: catColor }} className="text-xs font-bold font-['DM_Mono']">
+            {t.merchant.slice(0, 2).toUpperCase()}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-foreground truncate">{t.merchant}</p>
+            {t.fileName && (
+              <span className="text-[9px] bg-white/5 border border-white/10 text-muted-foreground px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold">
+                PDF Invoice
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t.category} · {t.date}</p>
+        </div>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full ${cfg.pill} font-medium flex-shrink-0 hidden sm:block uppercase tracking-tight`}>
+          {cfg.label}
+        </span>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 uppercase tracking-tight ${isCredit ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-white/5 text-muted-foreground border border-white/5"}`}>
+          {t.type}
+        </span>
+        <span className={`font-['DM_Mono'] text-sm font-semibold flex-shrink-0 ${isCredit ? "text-emerald-400" : "text-foreground"}`}>
+          {isCredit ? "+" : "-"}{fmt(t.amount)}
         </span>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{t.merchant}</p>
-        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t.category} · {t.date}</p>
-      </div>
-      <span className={`text-[10px] px-2 py-0.5 rounded-full ${cfg.pill} font-medium flex-shrink-0 hidden sm:block uppercase tracking-tight`}>
-        {cfg.label}
-      </span>
-      <span className="font-['DM_Mono'] text-sm font-medium text-foreground flex-shrink-0">
-        {fmt(t.amount)}
-      </span>
+      {t.items && t.items.length > 0 && (
+        <div className="mt-2 pl-12 flex flex-wrap gap-1.5">
+          {t.items.map((item, idx) => (
+            <span key={idx} className="text-[10px] bg-white/[0.02] border border-white/5 text-muted-foreground px-2 py-0.5 rounded-md">
+              {item.name}: {fmt(item.amount)}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -65,7 +87,7 @@ export function SearchBar({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search transactions…"
+        placeholder="Search transactions or merchants…"
         className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
       />
     </div>
@@ -79,7 +101,7 @@ export function CustomTooltip({ active, payload, label }: any) {
       <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-widest">{label}</p>
       {payload.map((p: any) => (
         <div key={p.name} className="flex items-center gap-2 text-xs py-0.5">
-          <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+          <span className="w-2 h-2 rounded-full" style={{ background: p.color || METHOD_CFG[p.dataKey as PaymentMethod]?.color || "#fff" }} />
           <span className="text-muted-foreground">{p.name}:</span>
           <span className="font-['DM_Mono'] font-medium text-foreground ml-auto">{fmt(p.value)}</span>
         </div>
@@ -87,3 +109,4 @@ export function CustomTooltip({ active, payload, label }: any) {
     </div>
   );
 }
+

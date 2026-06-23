@@ -1,14 +1,14 @@
-import { LayoutDashboard, Building2, Smartphone, CreditCard, Wallet, Upload, ChevronRight, Menu, X } from "lucide-react";
+import { Home, LayoutDashboard, Upload, Search, Lightbulb, FileText, ChevronRight, Menu, X } from "lucide-react";
 import { Page } from "../types";
 import { useState } from "react";
 
 const NAV: { id: Page; label: string; Icon: any }[] = [
+  { id: "landing", label: "Home", Icon: Home },
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
-  { id: "bank", label: "Bank Transfer", Icon: Building2 },
-  { id: "upi", label: "UPI / GPay", Icon: Smartphone },
-  { id: "card", label: "Card Payments", Icon: CreditCard },
-  { id: "cash", label: "Cash", Icon: Wallet },
-  { id: "upload", label: "Add Invoice", Icon: Upload },
+  { id: "upload", label: "Upload Statements", Icon: Upload },
+  { id: "explorer", label: "Ledger Explorer", Icon: Search },
+  { id: "insights", label: "AI Insights", Icon: Lightbulb },
+  { id: "reports", label: "Export Reports", Icon: FileText },
 ];
 
 export function Sidebar({ current, onNavigate }: { current: Page, onNavigate: (p: Page) => void }) {
@@ -33,9 +33,9 @@ export function Sidebar({ current, onNavigate }: { current: Page, onNavigate: (p
         <div className="flex flex-col h-full p-6">
           <div className="flex items-center gap-2 mb-10 px-2">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg font-['Outfit']">F</span>
+              <span className="text-primary-foreground font-bold text-lg font-['Outfit']">B</span>
             </div>
-            <span className="text-xl font-bold font-['Outfit'] tracking-tight text-foreground">Finlio</span>
+            <span className="text-lg font-bold font-['Outfit'] tracking-tight text-white">Statement AI</span>
           </div>
 
           <nav className="flex-1 space-y-1">

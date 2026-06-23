@@ -1,8 +1,11 @@
 import { useState } from "react";
 import Papa from "papaparse";
 import { Upload, X, Check, FileText, AlertCircle, Loader2 } from "lucide-react";
-import { Transaction, PaymentMethod } from "../types";
+import { Transaction, PaymentMethod, TransactionType } from "../types";
 import { toast } from "sonner";
+import { parsePdfInvoice } from "../pdfParser";
+import { parseExcelStatement } from "../excelParser";
+import { ReviewModal } from "./ReviewModal";
 
 export function UploadPage({
   onAdd,
@@ -13,12 +16,14 @@ export function UploadPage({
     category: "Food",
     amount: "",
     method: "upi" as PaymentMethod,
+    type: "debit" as TransactionType,
   });
   
   const [isUploading, setIsUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [reviewTxn, setReviewTxn] = useState<Partial<Transaction> | null>(null);
 
-  const categories = ["Food", "Groceries", "Housing", "Utilities", "Shopping", "Transport", "Health", "Entertainment", "Transfer", "Other"];
+  const categories = ["Food", "Shopping", "Transportation", "Bills", "Healthcare", "Entertainment", "Travel", "Education", "Investments", "Subscriptions", "Miscellaneous", "Transfer", "Other"];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +38,7 @@ export function UploadPage({
       category: form.category,
       amount: parseFloat(form.amount),
       method: form.method,
+      type: form.type,
     });
     toast.success("Transaction added successfully!");
     setForm({ 
@@ -40,52 +46,77 @@ export function UploadPage({
       merchant: "", 
       category: "Food", 
       amount: "", 
-      method: "upi" 
+      method: "upi",
+      type: "debit"
     });
   };
 
-  const handleFileUpload = (file: File) => {
-    if (!file.name.endsWith(".csv")) {
-      toast.error("Please upload a valid CSV file.");
-      return;
-    }
+  const handleFileUpload = async (file: File) => {
+    if (file.name.endsWith(".csv")) {
+      setIsUploading(true);
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          setIsUploading(false);
+          const data = results.data as any[];
+          let addedCount = 0;
 
-    setIsUploading(true);
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        setIsUploading(false);
-        const data = results.data as any[];
-        let addedCount = 0;
+          data.forEach((row) => {
+            const amount = parseFloat(row.amount);
+            if (row.merchant && !isNaN(amount)) {
+              onAdd({
+                id: Math.random().toString(36).substr(2, 9),
+                date: row.date || new Date().toISOString().slice(0, 10),
+                merchant: row.merchant,
+                category: row.category || "Other",
+                amount: amount,
+                method: (row.method?.toLowerCase() as PaymentMethod) || "upi",
+                type: (row.type?.toLowerCase() as TransactionType) || "debit",
+              });
+              addedCount++;
+            }
+          });
 
-        data.forEach((row) => {
-          // Expected columns: date, merchant, category, amount, method
-          const amount = parseFloat(row.amount);
-          if (row.merchant && !isNaN(amount)) {
-            onAdd({
-              id: Math.random().toString(36).substr(2, 9),
-              date: row.date || new Date().toISOString().slice(0, 10),
-              merchant: row.merchant,
-              category: row.category || "Other",
-              amount: amount,
-              method: (row.method?.toLowerCase() as PaymentMethod) || "upi",
-            });
-            addedCount++;
+          if (addedCount > 0) {
+            toast.success(`Successfully imported ${addedCount} transactions!`);
+          } else {
+            toast.error("No valid transactions found in the CSV. Check your columns (date, merchant, category, amount, method, type).");
           }
-        });
-
-        if (addedCount > 0) {
-          toast.success(`Successfully imported ${addedCount} transactions!`);
-        } else {
-          toast.error("No valid transactions found in the CSV. Check your columns (date, merchant, category, amount, method).");
+        },
+        error: (err) => {
+          setIsUploading(false);
+          toast.error("Error parsing CSV: " + err.message);
         }
-      },
-      error: (err) => {
+      });
+    } else if (file.name.endsWith(".pdf")) {
+      setIsUploading(true);
+      try {
+        const parsed = await parsePdfInvoice(file);
         setIsUploading(false);
-        toast.error("Error parsing CSV: " + err.message);
+        setReviewTxn(parsed);
+      } catch (err: any) {
+        setIsUploading(false);
+        toast.error("Failed to parse PDF invoice. Manual entry fallback. Details: " + err.message);
       }
-    });
+    } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+      setIsUploading(true);
+      try {
+        const parsedRows = await parseExcelStatement(file);
+        setIsUploading(false);
+        if (parsedRows.length > 0) {
+          parsedRows.forEach(row => onAdd(row as Transaction));
+          toast.success(`Successfully imported ${parsedRows.length} transactions from Excel sheet!`);
+        } else {
+          toast.error("No valid rows found in Excel sheet. Please format with Date, Merchant, and Amount columns.");
+        }
+      } catch (err: any) {
+        setIsUploading(false);
+        toast.error("Failed to parse Excel statement: " + err.message);
+      }
+    } else {
+      toast.error("Please upload a valid CSV, PDF, or Excel file.");
+    }
   };
 
   const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all";
@@ -96,7 +127,7 @@ export function UploadPage({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-['Outfit'] text-3xl font-bold text-foreground tracking-tight">Add Data</h1>
-          <p className="text-sm text-muted-foreground mt-1.5 font-medium">Log your spending manually or bulk import via CSV</p>
+          <p className="text-sm text-muted-foreground mt-1.5 font-medium">Log manually, upload PDF invoices, or bulk import via CSV</p>
         </div>
       </div>
 
@@ -115,7 +146,7 @@ export function UploadPage({
               </div>
               <div>
                 <label className={labelCls}>Amount (₹)</label>
-                <input type="number" placeholder="0.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className={inputCls} />
+                <input type="number" step="any" placeholder="0.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className={inputCls} />
               </div>
             </div>
 
@@ -142,13 +173,21 @@ export function UploadPage({
               </div>
             </div>
 
+            <div>
+              <label className={labelCls}>Type</label>
+              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as TransactionType })} className={inputCls}>
+                <option value="debit">Debit (Payment)</option>
+                <option value="credit">Credit (Refund / Salary)</option>
+              </select>
+            </div>
+
             <button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-primary/20 active:scale-[0.98] mt-4 uppercase tracking-widest text-xs">
               Save Transaction
             </button>
           </form>
         </div>
 
-        {/* CSV Upload */}
+        {/* Upload Zone */}
         <div className="flex flex-col gap-6">
           <div className="rounded-2xl border-2 border-dashed border-white/10 bg-[#0e1525]/50 p-8 flex flex-col items-center justify-center text-center group transition-all hover:border-primary/30 hover:bg-[#0e1525]"
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -163,13 +202,13 @@ export function UploadPage({
             <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-6 transition-all duration-300 ${dragging ? "bg-primary scale-110" : "bg-white/5 group-hover:bg-primary/10"}`}>
               {isUploading ? <Loader2 className="text-primary animate-spin" size={32} /> : <Upload className={`${dragging ? "text-primary-foreground" : "text-primary"}`} size={32} />}
             </div>
-            <h3 className="font-['Outfit'] font-bold text-foreground text-lg mb-2">Import CSV Data</h3>
-            <p className="text-sm text-muted-foreground max-w-[240px] leading-relaxed mb-6">
-              Drag and drop your bank statement or CSV file here to bulk import
+            <h3 className="font-['Outfit'] font-bold text-foreground text-lg mb-2">Import Statement File</h3>
+            <p className="text-sm text-muted-foreground max-w-[260px] leading-relaxed mb-6">
+              Drag and drop your PDF, CSV, or XLSX statement here to analyze
             </p>
             <label className="bg-white/5 hover:bg-white/10 text-foreground text-xs font-bold py-3 px-8 rounded-xl cursor-pointer transition-all border border-white/10 uppercase tracking-widest">
               Choose File
-              <input type="file" className="hidden" accept=".csv" onChange={(e) => {
+              <input type="file" className="hidden" accept=".csv,.pdf,.xlsx,.xls" onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleFileUpload(file);
               }} />
@@ -179,18 +218,29 @@ export function UploadPage({
           <div className="rounded-2xl border border-white/5 bg-[#0e1525]/30 p-6">
             <h4 className="font-bold text-xs text-foreground flex items-center gap-2 mb-4 uppercase tracking-widest">
               <AlertCircle size={14} className="text-amber-400" />
-              CSV Format Guide
+              Supported Formats
             </h4>
-            <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-              Your CSV should include these headers: <code className="text-primary-foreground/80 bg-primary/20 px-1.5 py-0.5 rounded">date</code>, <code className="text-primary-foreground/80 bg-primary/20 px-1.5 py-0.5 rounded">merchant</code>, <code className="text-primary-foreground/80 bg-primary/20 px-1.5 py-0.5 rounded">category</code>, <code className="text-primary-foreground/80 bg-primary/20 px-1.5 py-0.5 rounded">amount</code>, and <code className="text-primary-foreground/80 bg-primary/20 px-1.5 py-0.5 rounded">method</code>.
+            <p className="text-xs text-muted-foreground leading-relaxed mb-2">
+              <strong>PDF / Excel Statements:</strong> Automatically extracts dates, descriptions, balances, categories, and references without manual inputs.
             </p>
-            <div className="p-3 bg-black/30 rounded-lg font-['DM_Mono'] text-[10px] text-muted-foreground overflow-x-auto whitespace-nowrap">
-              date,merchant,category,amount,method<br/>
-              2026-06-18,Apple Store,Shopping,89000,card
-            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <strong>CSV File:</strong> Bulk import headers: <code className="text-primary/90 bg-primary/10 px-1 py-0.5 rounded">date</code>, <code className="text-primary/90 bg-primary/10 px-1 py-0.5 rounded">merchant</code>, <code className="text-primary/90 bg-primary/10 px-1 py-0.5 rounded">category</code>, <code className="text-primary/90 bg-primary/10 px-1 py-0.5 rounded">amount</code>, <code className="text-primary/90 bg-primary/10 px-1 py-0.5 rounded">method</code>, <code className="text-primary/90 bg-primary/10 px-1 py-0.5 rounded">type</code>.
+            </p>
           </div>
         </div>
       </div>
+
+      {reviewTxn && (
+        <ReviewModal
+          transaction={reviewTxn}
+          onClose={() => setReviewTxn(null)}
+          onSave={(newTxn) => {
+            onAdd(newTxn);
+            setReviewTxn(null);
+            toast.success("Successfully added invoice transaction!");
+          }}
+        />
+      )}
     </div>
   );
 }
